@@ -9,3 +9,4 @@ for y in b:
     if y == 2:
         continue
     print(y)
+
