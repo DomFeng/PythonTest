@@ -25,6 +25,12 @@ while bstype != 'B' and bstype != 'S':
 exchid = input("Please enter exchid:")
 counts = input("Please enter insert counts:")
 
+# 配置代理服务器
+proxy_server_ip = '192.168.0.183'
+proxy_server_port = 8888
+proxy_server_user = 'croot'
+proxy_server_password = 'croot'
+
 # datebase config
 host = '173.168.3.225'
 port = 3306
@@ -32,9 +38,8 @@ user = 'coredb'
 password = 'coredb'
 database = 'coredb'
 
-
 db_init = pymysql.connect(host=host, port=port, user=user, password=password, database=database,
-                         charset="utf8")
+                          charset="utf8")
 cursor_init = db_init.cursor()
 serial_sql = "select max(OrigSe()rialNo), max(SerialNo), max(clordId) from openorderdetail;"
 cursor_init.execute(serial_sql)

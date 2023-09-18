@@ -43,6 +43,7 @@ commit_cns = 0
 
 local_vars = threading.local()
 
+
 def singlethread(tag, num, table, insertdata):
     db = pymysql.connect(host='173.168.3.225', port=3306, user='coredb', password='coredb', database='coredb',
                          charset="utf8")
@@ -392,4 +393,3 @@ if __name__ == '__main__':
     print(f"Elapsed time: {elapsed_time:.2f} seconds")
     print("All methods have finished.")
     # db.commit()
-
