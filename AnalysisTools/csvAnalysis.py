@@ -1,6 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# 不使用科学计数法
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+
 # CSV文件路径
 csv_file = "D:\\202310312103.csv"  # 请替换成你的CSV文件路径
 
@@ -22,12 +25,17 @@ x_data = x_data[::-1]
 print(f"x_data has {len(x_data)} values.")
 print(f"y_data has {len(y_data)} values.")
 
+
+
+
 # 创建折线图
 plt.figure(figsize=(10, 6))
 plt.plot(x_data, y_data, marker='o', linestyle='-', color='b')
 plt.title(f"{x_column} vs. {y_column} 折线图")
 plt.xlabel(f"{x_column}")
 plt.ylabel(f"{y_column}")
+# 折线图显示不使用科学计数法
+plt.rcParams['axes.formatter.useoffset'] = False
 
 # 显示折线图
 plt.grid(True)
