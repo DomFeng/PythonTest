@@ -3,7 +3,7 @@ from multiprocessing import Process
 import time
 import pymysql
 
-# help
+# Help
 print("==========================工具说明==========================")
 print("请输入以下信息，进行委托流水生成：")
 print("productNum           产品代码")
@@ -14,10 +14,19 @@ print("exchid               交易市场，例:上海0，深圳1")
 print("counts               生成数量")
 print("===========================================================")
 
+print("是否为收益互换模式yes/no")
+is_swap = input("请输入：")
+
 # init variable
 productNum = input("Please enter productNum: ")
 productAcctNum = input("Please enter productAcctNum: ")
 portfolioNum = input("Please enter PortfolioNum: ")
+
+if is_swap == 'yes':
+    productNum_B = input("Please enter productNum_B: ")
+    productAcctNum_B = input("Please enter productAcctNum_B: ")
+    portfolioNum_B = input("Please enter PortfolioNum_B: ")
+
 bstype = input("Please enter bstype:")
 # 判断bstype是否为B或S，如果不是则重新输入
 while bstype != 'B' and bstype != 'S':
@@ -26,16 +35,17 @@ exchid = input("Please enter exchid:")
 counts = input("Please enter insert counts:")
 
 # datebase config
-host = '173.168.3.225'
-port = 3306
-user = 'coredb'
-password = 'coredb'
-database = 'coredb'
+host = '192.168.1.101'
+port = 3700
+user = 'root'
+password = 'root'
+database = 'coredb_v2310'
 
 db_init = pymysql.connect(host=host, port=port, user=user, password=password, database=database,
                           charset="utf8")
+print('查最大序列：'+ database)
 cursor_init = db_init.cursor()
-serial_sql = "select max(OrigSe()rialNo), max(SerialNo), max(clordId) from openorderdetail;"
+serial_sql = "select max(OrigSerialNo), max(SerialNo), max(clordId) from openorderdetail;"
 cursor_init.execute(serial_sql)
 serial = cursor_init.fetchone()
 # 如果serial[0]为空，osn=301070525584400000，否则osn=max(OrigSerialNo)+1
@@ -94,12 +104,14 @@ def startthread(tag, table, insertdata, threadnum, count):
         threaddict[key].join()
 
 
-def make_openorder(productNum, productAcctNum, portfolioNum, bstype, exchid, counts):
-    global osn, commit_cns, cn, stks
+def make_openorder(productNum, productAcctNum, portfolioNum, bstype, exchid, counts, productNum_B=0, productAcctNum_B=0,
+                   portfolioNum_B=0):
+    global osn, commit_cns, cn, stks, is_swap
     local_vars.osn = osn
     local_vars.cn = cn
     local_vars.stks = stks
     local_vars.commit_cns = commit_cns
+    local_vars.is_swap = is_swap
 
     db = pymysql.connect(host=host, port=port, user=user, password=password, database=database,
                          charset="utf8")
@@ -134,14 +146,26 @@ def make_openorder(productNum, productAcctNum, portfolioNum, bstype, exchid, cou
     cursor.execute(sql3, (productAcctNum, exchid))
     res3 = cursor.fetchall()
     # print(res3[0][0], res3[0][1])
+
+    if is_swap == 'yes':
+        cursor.execute(sql1, (productNum_B, productAcctNum_B, portfolioNum_B))
+        res1_B = cursor.fetchall()
+        cursor.execute(sql2, productAcctNum_B)
+        res2_B = cursor.fetchall()
+        cursor.execute(sql3, (productAcctNum_B, exchid))
+        res3_B = cursor.fetchall()
+
     cursor.execute(sql4, exchid)
     res4 = cursor.fetchall()
+    print('证券数量为：' + str(len(res4)))
     # print(res4[0][0], res4[0][1], res4[0][2], res4[0][3], res4[0][4])
     # print("===================================================")
+    cursor.close()
+    db.close()
     print("openorder插入数据开始，请稍等...")
 
     insert_openorder = (
-        "INSERT INTO coredb.openorder (OrigSerialNo, OrigSource, OrigChannel, productNum, productAcctNum, "
+        "INSERT INTO openorder (OrigSerialNo, OrigSource, OrigChannel, productNum, productAcctNum, "
         "PortfolioNum, PortfolioName, acctid, exchId, regId, offerRegId, stkId, stkName, F_hedgeFlag, "
         "coveredFlag, stkType, tradeType, deskId, BsType, OCFlag, orderTypeFlag, orderTypeDetailFlag, "
         "F_orderPriceType, MktOrderFlag, MktOrderFlagDesc, F_MatchCondition, ThirdContractNo, ContractNum, "
@@ -169,31 +193,42 @@ def make_openorder(productNum, productAcctNum, portfolioNum, bstype, exchid, cou
     for local_vars.i in range(int(counts)):
         datalist.append((
             local_vars.osn, res1[0][0], res1[0][1], res1[0][2], res1[0][3], res2[0][0], res3[0][0], res3[0][1],
-            res4[stks][0], res4[stks][1], res4[stks][2], res4[stks][3], res4[stks][4], bstype, local_vars.cn,
-            local_vars.cn, local_vars.osn, dates, dates, dates))
+            res4[local_vars.stks][0], res4[local_vars.stks][1], res4[local_vars.stks][2], res4[local_vars.stks][3],
+            res4[local_vars.stks][4], bstype, local_vars.cn, local_vars.cn, local_vars.osn, dates, dates, dates))
         local_vars.osn += 1
         local_vars.cn += 1
-        # if判断result4行数，如果stks小于result4行数，stks+1，否则stks=0
+        # 判断是否为收益互换
+        if is_swap == 'yes':
+            datalist.append((
+                local_vars.osn, res1_B[0][0], res1_B[0][1], res1_B[0][2], res1_B[0][3], res2_B[0][0], res3_B[0][0],
+                res3_B[0][1], res4[local_vars.stks][0], res4[local_vars.stks][1], res4[local_vars.stks][2],
+                res4[local_vars.stks][3], res4[local_vars.stks][4], bstype, local_vars.cn, local_vars.cn,
+                local_vars.osn, dates, dates, dates))
+            local_vars.osn += 1
+            local_vars.cn += 1
+        # if判断res4行数，如果stks小于res4行数，stks+1，否则stks=0
         if local_vars.stks < len(res4) - 1:
             local_vars.stks += 1
         else:
             local_vars.stks = 0
 
+
     startthread('openorder ', insert_openorder, datalist, threadnum, int(counts))
 
-    cursor.close()
-    db.close()
+
 
     print("openorder插入完成！")
 
 
-def make_openorderdetail(productNum, productAcctNum, portfolioNum, bstype, exchid, counts):
-    global osn, sn, cn, stks, commit_cns
+def make_openorderdetail(productNum, productAcctNum, portfolioNum, bstype, exchid, counts, productNum_B=0,
+                         productAcctNum_B=0, portfolioNum_B=0):
+    global osn, sn, cn, stks, commit_cns, is_swap
     local_vars.osn = osn
     local_vars.sn = sn
     local_vars.cn = cn
     local_vars.stks = stks
     local_vars.commit_cns = commit_cns
+    local_vars.is_swap = is_swap
 
     # Connect to MySQL database
     db = pymysql.connect(host=host, port=port, user=user, password=password, database=database,
@@ -229,14 +264,25 @@ def make_openorderdetail(productNum, productAcctNum, portfolioNum, bstype, exchi
     cursor.execute(sql3, (productAcctNum, exchid))
     res3 = cursor.fetchall()
     # print(res3[0][0], res3[0][1])
+
+    if is_swap == 'yes':
+        cursor.execute(sql1, (productNum_B, productAcctNum_B, portfolioNum_B))
+        res1_B = cursor.fetchall()
+        cursor.execute(sql2, productAcctNum_B)
+        res2_B = cursor.fetchall()
+        cursor.execute(sql3, (productAcctNum_B, exchid))
+        res3_B = cursor.fetchall()
+
     cursor.execute(sql4, exchid)
     res4 = cursor.fetchall()
     # print(res4[0][0], res4[0][1], res4[0][2], res4[0][3], res4[0][4])
     # print("===================================================")
+    cursor.close()
+    db.close()
     print("openorderdetail插入数据开始，请稍等...")
 
     insert_openorderdetail = (
-        "INSERT INTO coredb.openorderdetail (OrigSerialNo, SerialNo, Source, Channel, productNum, productAcctNum, "
+        "INSERT INTO openorderdetail (OrigSerialNo, SerialNo, Source, Channel, productNum, productAcctNum, "
         "PortfolioNum, PortfolioName, exchId, regId, offerRegId, stkId, stkName, F_hedgeFlag, coveredFlag, stkType, "
         "tradeType, deskId, BsType, OCFlag, orderTypeFlag, orderTypeDetailFlag, F_orderPriceType, MktOrderFlag, "
         "MktOrderFlagDesc, F_MatchCondition, OrderFlag, ThirdContractNo, ContractNum, OrigContractNum, ThirdSystemId, "
@@ -255,11 +301,20 @@ def make_openorderdetail(productNum, productAcctNum, portfolioNum, bstype, exchi
     for local_vars.i in range(int(counts)):
         datalist.append((
             local_vars.osn, local_vars.sn, res1[0][0], res1[0][1], res1[0][2], res2[0][0], res3[0][0], res3[0][1],
-            res4[stks][0], res4[stks][1], res4[stks][2], res4[stks][3], res4[stks][4], bstype, local_vars.cn,
-            local_vars.cn, dates, dates, dates, local_vars.cn))
+            res4[local_vars.stks][0], res4[local_vars.stks][1], res4[local_vars.stks][2], res4[local_vars.stks][3], 
+            res4[local_vars.stks][4], bstype, local_vars.cn, local_vars.cn, dates, dates, dates, 0))
         local_vars.osn += 1
         local_vars.sn += 1
         local_vars.cn += 1
+        # 判断是否为收益互换
+        if is_swap == 'yes':
+            datalist.append((
+                local_vars.osn, local_vars.sn, res1_B[0][0], res1_B[0][1], res1_B[0][2], res2_B[0][0], res3_B[0][0], res3_B[0][1],
+                res4[local_vars.stks][0], res4[local_vars.stks][1], res4[local_vars.stks][2], res4[local_vars.stks][3], 
+                res4[local_vars.stks][4], bstype, local_vars.cn, local_vars.cn, dates, dates, dates, local_vars.osn-1))
+            local_vars.osn += 1
+            local_vars.sn += 1
+            local_vars.cn += 1
         # if判断result4行数，如果stks小于result4行数，stks+1，否则stks=0
         if local_vars.stks < len(res4) - 1:
             local_vars.stks += 1
@@ -268,18 +323,19 @@ def make_openorderdetail(productNum, productAcctNum, portfolioNum, bstype, exchi
 
     startthread('openorderdetail ', insert_openorderdetail, datalist, threadnum, int(counts))
 
-    cursor.close()
-    db.close()
+
     print("openorderdetail插入完成！")
 
 
-def make_tradingresult(productNum, productAcctNum, portfolioNum, bstype, exchid, counts):
-    global osn, sn, cn, stks, commit_cns
+def make_tradingresult(productNum, productAcctNum, portfolioNum, bstype, exchid, counts, productNum_B=0,
+                       productAcctNum_B=0, portfolioNum_B=0):
+    global osn, sn, cn, stks, commit_cns, is_swap
     local_vars.osn = osn
     local_vars.sn = sn
     local_vars.cn = cn
     local_vars.stks = stks
     local_vars.commit_cns = commit_cns
+    local_vars.is_swap = is_swap
 
     # Connect to MySQL database
     db = pymysql.connect(host=host, port=port, user=user, password=password, database=database,
@@ -315,14 +371,25 @@ def make_tradingresult(productNum, productAcctNum, portfolioNum, bstype, exchid,
     cursor.execute(sql3, (productAcctNum, exchid))
     res3 = cursor.fetchall()
     # print(res3[0][0], res3[0][1])
+
+    if is_swap == 'yes':
+        cursor.execute(sql1, (productNum_B, productAcctNum_B, portfolioNum_B))
+        res1_B = cursor.fetchall()
+        cursor.execute(sql2, productAcctNum_B)
+        res2_B = cursor.fetchall()
+        cursor.execute(sql3, (productAcctNum_B, exchid))
+        res3_B = cursor.fetchall()
+
     cursor.execute(sql4, exchid)
     res4 = cursor.fetchall()
     # print(res4[0][0], res4[0][1], res4[0][2], res4[0][3], res4[0][4])
     # print("===================================================")
+    cursor.close()
+    db.close()
     print("tradingresult插入数据开始，请稍等...")
 
     insert_tradingresult = (
-        "INSERT INTO coredb.tradingresult (OrigSerialNo, OrigSource, OrigChannel, SerialNo, productNum, "
+        "INSERT INTO tradingresult (OrigSerialNo, OrigSource, OrigChannel, SerialNo, productNum, "
         "productAcctNum, PortfolioNum, PortfolioName, acctid, exchId, regId, offerRegId, stkId, stkName, F_hedgeFlag, "
         "coveredFlag, stkType, tradeType, deskId, BsType, OCFlag, orderTypeFlag, orderTypeDetailFlag, ReportType, "
         "OrderFlag, knockQty, postQty, knockPrice, knockAmt, fullknockAmt, accuredInterest, knockCode, reckoningAmt, "
@@ -331,21 +398,30 @@ def make_tradingresult(productNum, productAcctNum, portfolioNum, bstype, exchid,
         "otherFee, instDetailSerialNum, InstructId, basketId, BatchSerialNo, ThirdSystemId, NoOrderFlag, ExchRate, "
         "SequenceNo, targetDeskId, targetRegId, appointNo, occurTime, knockTime, postProcessFlag, exchProperty, "
         "totalCommision, F_MatchCondition, F_OrderPriceType, stopPrice, StkProperty, GwSequenceNo, IntelligentType, "
-        "arbiContractID, MktOrderFlag, adjustRate) VALUES(%s, '3', '', %s, %s, %s, %s, "
+        "arbiContractID, MktOrderFlag, adjustRate, tdCloseQty) VALUES(%s, '3', '', %s, %s, %s, %s, "
         "%s, %s, '1', %s, %s, %s, %s, 'SPEC', %s, %s, %s, '', %s, 'O', "
-        "'0', '00', '1', 'N', 100, 0, 11.4000, 1140.00, 1140.00, 0.00000000, '1', -1193.48, -1193.48, %s, %s, 0.00, "
+        "'0', '00', '1', 'N', 100, 0, 11.4000, 1140.00, 1140.00, 0.00000000, %s, -1193.48, -1193.48, %s, %s, 0.00, "
         "0.00, 0.00, 1.14, 1.14, 1.14, 1.20, 1.14, 1.14, 1.14, 1.14, 50.00, 0.00, 0, '', '', %s, '2301', 'N', "
-        "1.000000, 1, '', '', '', %s, %s, 0, '0', 53.48, '', 'LIMIT', 0.0000, '0', -1, 'DMA', '', '', 0.000000);")
+        "1.000000, 1, '', '', '', %s, %s, 0, '0', 53.48, '', 'LIMIT', 0.0000, '0', -1, 'DMA', '', '', 0.000000, 100);")
 
     datalist = []
     for local_vars.i in range(int(counts)):
         datalist.append((
             local_vars.osn, local_vars.sn, res1[0][0], res1[0][1], res1[0][2], res1[0][3], res2[0][0], res3[0][0],
-            res3[0][1], res4[stks][0], res4[stks][1], res4[stks][2], res4[stks][3], res4[stks][4], bstype,
-            local_vars.cn, local_vars.cn, local_vars.osn, dates, dates))
+            res3[0][1], res4[local_vars.stks][0], res4[local_vars.stks][1], res4[local_vars.stks][2], res4[local_vars.stks][3], 
+            res4[local_vars.stks][4], bstype, local_vars.osn, local_vars.cn, local_vars.cn, local_vars.osn, dates, dates))
         local_vars.osn += 1
         local_vars.sn += 1
         local_vars.cn += 1
+        # 判断是否为收益互换
+        if is_swap == 'yes':
+            datalist.append((
+                local_vars.osn, local_vars.sn, res1_B[0][0], res1_B[0][1], res1_B[0][2], res1_B[0][3], res2_B[0][0], res3_B[0][0],
+                res3_B[0][1], res4[local_vars.stks][0], res4[local_vars.stks][1], res4[local_vars.stks][2], res4[local_vars.stks][3], 
+                res4[local_vars.stks][4], bstype, local_vars.osn-1, local_vars.cn, local_vars.cn, local_vars.osn, dates, dates))
+            local_vars.osn += 1
+            local_vars.sn += 1
+            local_vars.cn += 1
         # if判断result4行数，如果stks小于result4行数，stks+1，否则stks=0
         if local_vars.stks < len(res4) - 1:
             local_vars.stks += 1
@@ -354,8 +430,6 @@ def make_tradingresult(productNum, productAcctNum, portfolioNum, bstype, exchid,
 
     startthread('tradingresult ', insert_tradingresult, datalist, threadnum, int(counts))
 
-    cursor.close()
-    db.close()
     print("tradingresult插入完成！")
 
 
@@ -363,11 +437,17 @@ if __name__ == '__main__':
     start_time = time.time()  # 记录方法开始时间
 
     Process1 = Process(target=make_openorder,
-                       args=(productNum, productAcctNum, portfolioNum, bstype, exchid, counts))
+                       args=(
+                       productNum, productAcctNum, portfolioNum, bstype, exchid, counts, productNum_B, productAcctNum_B,
+                       portfolioNum_B))
     Process2 = Process(target=make_openorderdetail,
-                       args=(productNum, productAcctNum, portfolioNum, bstype, exchid, counts))
+                       args=(
+                       productNum, productAcctNum, portfolioNum, bstype, exchid, counts, productNum_B, productAcctNum_B,
+                       portfolioNum_B))
     Process3 = Process(target=make_tradingresult,
-                       args=(productNum, productAcctNum, portfolioNum, bstype, exchid, counts))
+                       args=(
+                       productNum, productAcctNum, portfolioNum, bstype, exchid, counts, productNum_B, productAcctNum_B,
+                       portfolioNum_B))
     # 启动线程
     Process1.start()
     Process2.start()
