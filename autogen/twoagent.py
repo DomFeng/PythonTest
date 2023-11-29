@@ -7,7 +7,7 @@ import autogen
 
 # helvncjrvc03@outlook.com----umiirr57++++----sess-4YThLTfF2KP5dLWum9AZAsgc9cxx5VGlRN15HZql
 
-config_list = [{'model': 'gpt-3.5-turbo', 'api_key': 'sess-4YThLTfF2KP5dLWum9AZAsgc9cxx5VGlRN15HZql'},]
+config_list = [{'model': 'gpt-3.5-turbo', 'api_key': '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'},]
 # create an AssistantAgent named "assistant"
 assistant = autogen.AssistantAgent(
     name="assistant",
