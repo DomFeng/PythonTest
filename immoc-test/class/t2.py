@@ -57,6 +57,17 @@ class Student():
 # student1.add(1,2)
 # Student.add(1,2)
 student1 = Student('石敢当', 18)
-print(student1.marking(-3))
+student2 = Student('喜小乐', 19)
+print(student1.marking(3))
 
 # score变量目前是公开的 public  私有的 private
+# 动态添加私有变量
+student1.__score = -1
+
+#可以通过打印__dict__查看实例变量
+print(student1.__dict__)
+
+#访问私有变量，python解释器会把__score变量改成_Student__score
+print(student1._Student__score)
+# print(student1.__score)
+# print(student2.__score)
